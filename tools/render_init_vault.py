@@ -64,9 +64,7 @@ GRANT EXECUTE ON FUNCTION vault.rotate(text, text, integer) TO vault_rotator;
 -- Default-deny the flag tables. Every function above is SECURITY DEFINER and
 -- owned by the database owner, so they keep working.
 ALTER TABLE vault.flag_instances ENABLE ROW LEVEL SECURITY;
-ALTER TABLE vault.flag_instances FORCE ROW LEVEL SECURITY;
 ALTER TABLE vault.flag_redemptions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE vault.flag_redemptions FORCE ROW LEVEL SECURITY;
 """
 
 
