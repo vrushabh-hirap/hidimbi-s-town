@@ -467,8 +467,12 @@ def run_chain(args):
                f"RS256 token accepted for {flag_id}; attestation issued")
 
     # ---------------------------------------------------------------- 13
+    # The bank key is derived over the shared scope, and so are the proof and
+    # seal presented at stage 22. When the deployment runs in shared mode the
+    # flagger maps every player onto the single `town_folk` row, so that is the
+    # team identity we must sign over too.
     if args.team is None:
-        args.team = team.replace("team_", "", 1)
+        args.team = os.environ.get("HIDIMBI_FIXED_TEAM", "town_folk")
     seed = extract_mosaic_seed(attestation,
                                open(os.path.join(ROOT_DIR, "app", "src", "main", "assets",
                                                 "mosaic_wells.bin"), "rb").read())

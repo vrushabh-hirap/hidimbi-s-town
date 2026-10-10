@@ -23,8 +23,8 @@ This file contains the copy shown to participants on the competition platform: c
 ### What you're given
 
 - `Dimbapura.apk` — the target Android application.
-- `[Backend API URL — TBD, fill in once hosted]`
-- `[Flag Service URL — TBD, fill in once hosted]`
+- `https://hidimbi-lake.onrender.com` — Lake API
+- `https://hidimbi-flag.onrender.com` — Flag Service
 - No source code, no database dumps, and no further credentials are provided. The target APK, the remote WAF-hardened backend, and the isolated Flag Service constitute the entire attack surface.
 
 ### The chain, at a glance
