@@ -1,0 +1,3 @@
+/Users/vrushabhhirap/AndroidStudioProjects/HidimbisTown/app/.cxx/Debug/bc6d5i1u/x86_64/CMakeFiles/town.dir
+/Users/vrushabhhirap/AndroidStudioProjects/HidimbisTown/app/.cxx/Debug/bc6d5i1u/x86_64/CMakeFiles/edit_cache.dir
+/Users/vrushabhhirap/AndroidStudioProjects/HidimbisTown/app/.cxx/Debug/bc6d5i1u/x86_64/CMakeFiles/rebuild_cache.dir

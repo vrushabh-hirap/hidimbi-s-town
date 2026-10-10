@@ -1,0 +1,21 @@
+# Local runtime state (dev_stack.sh)
+hidimbi_stack/
+*.password
+*.salt
+*.hex
+passwords.env
+
+# generated secret material — never committed
+backend/whistle.bin
+backend/flag_sign_key.pem
+backend/flagger_proof_key.bin
+backend/flask*
+backend/*.pem
+
+# generated assets (recreate with tools/gen_*.py)
+app/src/main/assets/cave_store.bin
+app/src/main/assets/mosaic_wells.bin
+
+# host harness build artifacts
+tools/host_harness/harness
+tools/host_harness/*.o

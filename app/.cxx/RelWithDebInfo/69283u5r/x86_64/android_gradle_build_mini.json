@@ -1,0 +1,27 @@
+{
+  "buildFiles": [
+    "/Users/vrushabhhirap/AndroidStudioProjects/HidimbisTown/app/src/main/cpp/CMakeLists.txt"
+  ],
+  "cleanCommandsComponents": [
+    [
+      "/Users/vrushabhhirap/Library/Android/sdk/cmake/3.22.1/bin/ninja",
+      "-C",
+      "/Users/vrushabhhirap/AndroidStudioProjects/HidimbisTown/app/.cxx/RelWithDebInfo/69283u5r/x86_64",
+      "clean"
+    ]
+  ],
+  "buildTargetsCommandComponents": [
+    "/Users/vrushabhhirap/Library/Android/sdk/cmake/3.22.1/bin/ninja",
+    "-C",
+    "/Users/vrushabhhirap/AndroidStudioProjects/HidimbisTown/app/.cxx/RelWithDebInfo/69283u5r/x86_64",
+    "{LIST_OF_TARGETS_TO_BUILD}"
+  ],
+  "libraries": {
+    "town::@6890427a1f51a3e7e1df": {
+      "artifactName": "town",
+      "abi": "x86_64",
+      "output": "/Users/vrushabhhirap/AndroidStudioProjects/HidimbisTown/app/build/intermediates/cxx/RelWithDebInfo/69283u5r/obj/x86_64/libtown.so",
+      "runtimeFiles": []
+    }
+  }
+}

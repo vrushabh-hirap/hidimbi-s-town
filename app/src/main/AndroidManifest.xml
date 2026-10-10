@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <permission
+        android:name="com.vrushabhhirap.permission.TEMPLE_ACCESS"
+        android:protectionLevel="signature" />
+
+    <application
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.HidimbisTown">
+
+        <!-- Main Map UI Activity -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Stage 3 & 5: Forest & Cave ContentProvider -->
+        <provider
+            android:name=".TownProvider"
+            android:authorities="com.vrushabhhirap.hidimbistown.provider"
+            android:exported="true" />
+
+        <!-- Stage 6: Temple BroadcastReceiver -->
+        <receiver
+            android:name=".TownReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.vrushabhhirap.hidimbistown.TEMPLE_PILGRIMAGE" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Stage 7: Palace Bound Service -->
+        <service
+            android:name=".TownService"
+            android:exported="true" />
+
+        <!-- Stage 8: Market Trade Activity & Decoy Lake Trap -->
+        <activity
+            android:name=".TownActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.vrushabhhirap.hidimbistown.MARKET_TRADE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="com.vrushabhhirap.hidimbistown.LAKE_REFLECTION" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+    </application>
+
+</manifest>

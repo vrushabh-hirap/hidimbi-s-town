@@ -1,0 +1,5 @@
+# ninja log v5
+1512	1583	1791565758253225544	/Users/vrushabhhirap/AndroidStudioProjects/HidimbisTown/app/build/intermediates/cxx/Debug/bc6d5i1u/obj/arm64-v8a/libtown.so	b5fe7dca0a104fee
+0	1510	1791565758175692992	CMakeFiles/town.dir/native-lib.cpp.o	fdcfbe9ccd537efe
+10	1410	1791606202519075442	CMakeFiles/town.dir/native-lib.cpp.o	fdcfbe9ccd537efe
+1410	1634	1791606202742888046	/Users/vrushabhhirap/AndroidStudioProjects/HidimbisTown/app/build/intermediates/cxx/Debug/bc6d5i1u/obj/arm64-v8a/libtown.so	b5fe7dca0a104fee

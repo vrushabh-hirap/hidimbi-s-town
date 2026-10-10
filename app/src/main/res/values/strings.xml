@@ -1,0 +1,6 @@
+<resources>
+    <string name="app_name">Hidimbi\'s Town</string>
+    <!-- Decoy Flag 1 / Forest Token Salt -->
+    <string name="ancient_forest_whisper">FLAG{HIDIMBI_IS_WATCHING}</string>
+    <string name="town_description">Deep in the forest, Hidimbi built a sanctuary hiding in plain sight.</string>
+</resources>

@@ -1,0 +1,139 @@
+# ---------------------------------------------------------------------------
+# Hidimbi's Town — four containers.
+#
+#   app       (hidimbi_app)     :8000  Lake API + Observatory + Courier
+#   flagger   (hidimbi_flagger) :8001  public flag service
+#                                 :8100  Keeper's internal index (NOT published)
+#   vault     (hidimbi_vault)   :5432  PostgreSQL — the flag lives here
+#   rotator   (hidimbi_flagger) runs vault.rotate() on a schedule
+#
+# Every secret is supplied through the environment. Nothing here is committed.
+#
+# Deploy with (a .env file next to this file is the easiest way):
+#   docker compose up -d --build
+# ---------------------------------------------------------------------------
+version: "3.9"
+
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-common-env: &common-env
+  CONFIG_PATH: /app/config.json
+  DB_HOST: ${DB_HOST:-vault}
+  DB_PORT: ${DB_PORT:-5432}
+  DB_NAME: ${DB_NAME:-hidimbi_vault}
+  DB_USER: ${DB_USER:-vault_flagger}
+  DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD}
+  INSTANCE_ID: ${HIDIMBI_INSTANCE_ID:-hidimbi-main}
+  TEAM_ID: ${HIDIMBI_TEAM_ID:-solo}
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    image: hidimbi-town/app:3.0
+    container_name: hidimbi_app
+    restart: unless-stopped
+    depends_on:
+      vault:
+        condition: service_healthy
+    logging: *default-logging
+    environment:
+      <<: *common-env
+      HIDIMBI_ROLE: app
+      # where the flag service lives, as seen from inside the docker network
+      FLAGGER_HOST: flagger
+      FLAGGER_PORT: "8001"
+      FLAGGER_INTERNAL_PORT: "8100"
+      # the courier may only talk to the internal network
+      COURIER_INTERNAL_TARGET: 127.0.0.1:8100
+      BACKEND_BEARER_SECRET: ${BACKEND_BEARER_SECRET:?set BACKEND_BEARER_SECRET}
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    networks:
+      hidimbi_net:
+        aliases: [lake]
+
+  flagger:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    image: hidimbi-town/flagger:3.0
+    container_name: hidimbi_flagger
+    restart: unless-stopped
+    depends_on:
+      vault:
+        condition: service_healthy
+    logging: *default-logging
+    environment:
+      <<: *common-env
+      HIDIMBI_ROLE: flagger
+      FLAGGER_PROOF_KEY: ${FLAGGER_PROOF_KEY:?set FLAGGER_PROOF_KEY}
+      BACKEND_BEARER_SECRET: ${BACKEND_BEARER_SECRET:?set BACKEND_BEARER_SECRET}
+    # Only 8001 is published. 8100 stays on the internal network, which is
+    # what makes the Stage-21 SSRF mandatory rather than optional.
+    ports:
+      - "${FLAGGER_PORT:-8001}:8001"
+    networks:
+      hidimbi_net:
+        aliases: [flagger]
+
+  vault:
+    image: postgres:15-alpine
+    container_name: hidimbi_vault
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      POSTGRES_USER: ${VAULT_ADMIN_USER:-vault_owner}
+      POSTGRES_PASSWORD: ${VAULT_ADMIN_PASSWORD:?set VAULT_ADMIN_PASSWORD}
+      POSTGRES_DB: ${DB_NAME:-hidimbi_vault}
+      HIDIMBI_INSTANCE_ID: ${HIDIMBI_INSTANCE_ID:-hidimbi-main}
+      HIDIMBI_TEAM_ID: ${HIDIMBI_TEAM_ID:-solo}
+      HIDIMBI_FLAG_TTL_HOURS: ${HIDIMBI_FLAG_TTL_HOURS:-24}
+      HIDIMBI_FLAG_SALT: ${HIDIMBI_FLAG_SALT:-${DB_PASSWORD}}
+      # shared password for the two runtime roles created by the init script
+      DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD}
+      ROTATOR_PASSWORD: ${ROTATOR_PASSWORD:-${DB_PASSWORD}}
+      HIDIMBI_ROTATION_SECONDS: ${HIDIMBI_ROTATION_SECONDS:-3600}
+    volumes:
+      - vault_pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${VAULT_ADMIN_USER:-vault_owner} -d ${DB_NAME:-hidimbi_vault}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      hidimbi_net:
+        aliases: [vault]
+
+  rotator:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    image: hidimbi-town/rotator:3.0
+    container_name: hidimbi_rotator
+    restart: unless-stopped
+    depends_on:
+      vault:
+        condition: service_healthy
+    logging: *default-logging
+    environment:
+      <<: *common-env
+      HIDIMBI_ROLE: rotator
+      FLAG_TTL_HOURS: ${HIDIMBI_FLAG_TTL_HOURS:-24}
+      ROTATION_INTERVAL_SECONDS: ${HIDIMBI_ROTATION_SECONDS:-3600}
+    # no ports: nothing in this container is reachable from outside
+    networks:
+      hidimbi_net:
+
+networks:
+  hidimbi_net:
+    driver: bridge
+
+volumes:
+  vault_pgdata:
