@@ -48,6 +48,7 @@ REVOKE ALL ON SCHEMA vault      FROM vault_flagger, vault_rotator;
 REVOKE ALL ON ALL TABLES    IN SCHEMA vault FROM vault_flagger, vault_rotator;
 REVOKE ALL ON ALL SEQUENCES IN SCHEMA vault FROM vault_flagger, vault_rotator;
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA vault FROM vault_flagger, vault_rotator;
+REVOKE ALL ON ALL FUNCTIONS IN SCHEMA vault FROM PUBLIC;
 ALTER DEFAULT PRIVILEGES IN SCHEMA vault
     REVOKE ALL ON TABLES    FROM vault_flagger, vault_rotator;
 ALTER DEFAULT PRIVILEGES IN SCHEMA vault

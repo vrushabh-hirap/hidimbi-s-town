@@ -1,20 +1,20 @@
 name: Rotate the Vault flag epochs
 
 # ---------------------------------------------------------------------------
-# Flags a fresh epoch on a schedule, using the database's own
-# vault.rotate() function.
+# Flags a fresh epoch on a schedule, using the database's own vault.rotate().
 #
-# This replaces the Render Background Worker. A GitHub Action can reach the
-# database directly because Render gives you an External Database URL; a
-# Background Worker inside Render could too, but this way the rotation is
-# version-controlled, visible in the run log, and doesn't need a fourth
-# Render service burning an instance slot.
+# This replaces the Render Background Worker: no fourth Render service, no
+# instance slot burned, and the rotation log is inspectable in the Actions tab.
+#
+# It connects as the DATABASE OWNER (the credentials in the External Database
+# URL), which is guaranteed to have permission to call vault.rotate(). If you
+# later want to run it as the narrower vault_rotator role, set the four
+# VAULT_ROTATOR_* variables and it will build that URL instead.
 # ---------------------------------------------------------------------------
 
 on:
   schedule:
-    # Every hour, on the hour. Change to suit your competition window.
-    - cron: "0 * * * *"
+    - cron: "0 * * * *"       # every hour, on the hour
   workflow_dispatch:          # so you can trigger it by hand to test
 
 concurrency:
@@ -26,64 +26,72 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Check out (for the schema, if it is ever needed again)
-        uses: actions/checkout@v4
-
       - name: Validate required secrets
         env:
-          DATABASE_URL: ${{ secrets.RENDER_DATABASE_URL }}
-          DB_PASSWORD: ${{ secrets.VAULT_ROTATOR_PASSWORD }}
+          RENDER_DATABASE_URL: ${{ secrets.RENDER_DATABASE_URL }}
         run: |
-          if [ -z "$DATABASE_URL" ]; then
-            echo "::error secret RENDER_DATABASE_URL is not set"
+          if [ -z "$RENDER_DATABASE_URL" ]; then
+            echo "::error::Add the RENDER_DATABASE_URL secret first."
+            echo "::error::It is the External Database URL from your Render"
+            echo "::error::PostgreSQL dashboard (the one containing"
+            echo "::error::hidimbi_vault_user, ending in onrender.com)."
             exit 1
           fi
-          if [ -z "$DB_PASSWORD" ]; then
-            echo "::error secret VAULT_ROTATOR_PASSWORD is not set"
-            exit 1
+          echo "[*] database URL present"
+
+      - name: Build the connection string
+        id: dsn
+        env:
+          RENDER_DATABASE_URL: ${{ secrets.RENDER_DATABASE_URL }}
+          ROTATOR_URL: ${{ secrets.VAULT_ROTATOR_URL }}
+        run: |
+          # Prefer the narrowly-scoped rotator role when it has been set up;
+          # otherwise fall back to the database owner.
+          if [ -n "$ROTATOR_URL" ]; then
+            echo "target=rotator" >> "$GITHUB_OUTPUT"
+            echo "url=$ROTATOR_URL" >> "$GITHUB_OUTPUT"
+            echo "[*] using the vault_rotator role"
+          else
+            echo "target=owner" >> "$GITHUB_OUTPUT"
+            echo "url=$RENDER_DATABASE_URL" >> "$GITHUB_OUTPUT"
+            echo "[*] VAULT_ROTATOR_URL not set; using the database owner"
           fi
-          echo "[*] secrets present"
 
       - name: Install postgres client
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq postgresql-client >/dev/null
-          echo "[*] psql $(psql --version | awk '{print $3}')"
 
       - name: Rotate all epochs
         env:
-          DATABASE_URL: ${{ secrets.RENDER_DATABASE_URL }}
-          DB_PASSWORD: ${{ secrets.VAULT_ROTATOR_PASSWORD }}
+          TARGET_URL: ${{ steps.dsn.outputs.url }}
           INSTANCE_ID: ${{ vars.HIDIMBI_INSTANCE_ID }}
           TEAM_ID: ${{ vars.HIDIMBI_TEAM_ID }}
           FLAG_TTL_HOURS: ${{ vars.HIDIMBI_FLAG_TTL_HOURS }}
         run: |
           set -euo pipefail
-
-          # vault.rotate() is SECURITY DEFINER, so the rotator role only needs
-          # EXECUTE on that one function. It cannot read a flag.
-          ROWS=$(psql "$DATABASE_URL" -Atq -v ON_ERROR_STOP=1 -c \
+          EPOCH=$(psql "$TARGET_URL" -Atq -v ON_ERROR_STOP=1 -c \
             "SELECT vault.rotate('${INSTANCE_ID:-hidimbi-main}',
                                  '${TEAM_ID:-solo}',
                                  ${FLAG_TTL_HOURS:-24});")
-          echo "[*] rotated to epoch ${ROWS:-1}"
+          echo "[*] rotated to epoch ${EPOCH:-1}"
 
-      - name: Report live epochs (no flag values ever printed)
+      - name: Report live epochs (never prints a flag value)
         env:
-          DATABASE_URL: ${{ secrets.RENDER_DATABASE_URL }}
+          TARGET_URL: ${{ steps.dsn.outputs.url }}
         run: |
-          echo "[*] live flag rows (instance | team | epoch | expired | consumed):"
-          psql "$DATABASE_URL" -Atq -F ' | ' -c \
+          echo "[*] live rows (instance | team | epoch | expired | consumed):"
+          psql "$TARGET_URL" -Atq -F ' | ' -c \
             "SELECT instance_id, team_id, epoch_id,
                     (expires_at < now()) AS expired, consumed
                FROM vault.flag_instances
               ORDER BY epoch_id;"
           echo "[*] total redemptions:"
-          psql "$DATABASE_URL" -Atq -c \
+          psql "$TARGET_URL" -Atq -c \
             "SELECT count(*) FROM vault.flag_redemptions;"
 
-      - name: Fail loudly on any error
+      - name: Warn on failure
         if: failure()
         run: |
-          echo "::error Vault rotation failed. Old selectors remain valid,"
-          echo "::error so the previous epoch keeps working until fixed."
+          echo "::warning::Rotation failed. The previous epoch stays valid,"
+          echo "::warning::so old selectors keep working until this is fixed."

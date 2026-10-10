@@ -38,6 +38,12 @@ ROLES_SQL = os.path.join(ROOT, "backend", "db", "init", "00_create_roles.sql")
 SCHEMA_SQL = os.path.join(ROOT, "backend", "db", "init", "01_schema.sql")
 
 GRANTS_SQL = """
+-- CRITICAL: PostgreSQL grants EXECUTE to PUBLIC on every new function by
+-- default. Without this revoke, EVERY role in the database (including
+-- vault_rotator, and any future role) can call claim_by_selector and read a
+-- flag. Revoke from PUBLIC first, then re-grant narrowly.
+REVOKE ALL ON ALL FUNCTIONS IN SCHEMA vault FROM PUBLIC;
+
 GRANT USAGE ON SCHEMA vault TO vault_flagger, vault_rotator;
 
 -- flagger: exactly four functions, and no SELECT on any table.
@@ -100,19 +106,24 @@ def main():
             cur.execute(open(SCHEMA_SQL).read())
 
             print("[*] 3/4 setting runtime role passwords")
+            # NOTE: WITH LOGIN is mandatory. 00_create_roles.sql creates these
+            # roles with plain CREATE ROLE, so on any re-run the ELSE branch
+            # fires and a bare ALTER ROLE ... PASSWORD would leave the role
+            # unable to log in — which makes every service connection fail
+            # with "role is not permitted to log in".
             cur.execute(
                 "DO $$ BEGIN "
                 "  IF NOT EXISTS (SELECT 1 FROM pg_roles "
                 "                WHERE rolname='vault_flagger') THEN "
                 "    CREATE ROLE vault_flagger LOGIN PASSWORD %s; "
                 "  ELSE "
-                "    ALTER ROLE vault_flagger PASSWORD %s; "
+                "    ALTER ROLE vault_flagger WITH LOGIN PASSWORD %s; "
                 "  END IF; "
                 "  IF NOT EXISTS (SELECT 1 FROM pg_roles "
                 "                WHERE rolname='vault_rotator') THEN "
                 "    CREATE ROLE vault_rotator LOGIN PASSWORD %s; "
                 "  ELSE "
-                "    ALTER ROLE vault_rotator PASSWORD %s; "
+                "    ALTER ROLE vault_rotator WITH LOGIN PASSWORD %s; "
                 "  END IF; END $$;",
                 (runtime_pw, runtime_pw, rotator_pw, rotator_pw))
 
