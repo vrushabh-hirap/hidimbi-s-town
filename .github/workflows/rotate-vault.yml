@@ -1,0 +1,89 @@
+name: Rotate the Vault flag epochs
+
+# ---------------------------------------------------------------------------
+# Flags a fresh epoch on a schedule, using the database's own
+# vault.rotate() function.
+#
+# This replaces the Render Background Worker. A GitHub Action can reach the
+# database directly because Render gives you an External Database URL; a
+# Background Worker inside Render could too, but this way the rotation is
+# version-controlled, visible in the run log, and doesn't need a fourth
+# Render service burning an instance slot.
+# ---------------------------------------------------------------------------
+
+on:
+  schedule:
+    # Every hour, on the hour. Change to suit your competition window.
+    - cron: "0 * * * *"
+  workflow_dispatch:          # so you can trigger it by hand to test
+
+concurrency:
+  group: vault-rotation
+  cancel-in-progress: false
+
+jobs:
+  rotate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out (for the schema, if it is ever needed again)
+        uses: actions/checkout@v4
+
+      - name: Validate required secrets
+        env:
+          DATABASE_URL: ${{ secrets.RENDER_DATABASE_URL }}
+          DB_PASSWORD: ${{ secrets.VAULT_ROTATOR_PASSWORD }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error secret RENDER_DATABASE_URL is not set"
+            exit 1
+          fi
+          if [ -z "$DB_PASSWORD" ]; then
+            echo "::error secret VAULT_ROTATOR_PASSWORD is not set"
+            exit 1
+          fi
+          echo "[*] secrets present"
+
+      - name: Install postgres client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client >/dev/null
+          echo "[*] psql $(psql --version | awk '{print $3}')"
+
+      - name: Rotate all epochs
+        env:
+          DATABASE_URL: ${{ secrets.RENDER_DATABASE_URL }}
+          DB_PASSWORD: ${{ secrets.VAULT_ROTATOR_PASSWORD }}
+          INSTANCE_ID: ${{ vars.HIDIMBI_INSTANCE_ID }}
+          TEAM_ID: ${{ vars.HIDIMBI_TEAM_ID }}
+          FLAG_TTL_HOURS: ${{ vars.HIDIMBI_FLAG_TTL_HOURS }}
+        run: |
+          set -euo pipefail
+
+          # vault.rotate() is SECURITY DEFINER, so the rotator role only needs
+          # EXECUTE on that one function. It cannot read a flag.
+          ROWS=$(psql "$DATABASE_URL" -Atq -v ON_ERROR_STOP=1 -c \
+            "SELECT vault.rotate('${INSTANCE_ID:-hidimbi-main}',
+                                 '${TEAM_ID:-solo}',
+                                 ${FLAG_TTL_HOURS:-24});")
+          echo "[*] rotated to epoch ${ROWS:-1}"
+
+      - name: Report live epochs (no flag values ever printed)
+        env:
+          DATABASE_URL: ${{ secrets.RENDER_DATABASE_URL }}
+        run: |
+          echo "[*] live flag rows (instance | team | epoch | expired | consumed):"
+          psql "$DATABASE_URL" -Atq -F ' | ' -c \
+            "SELECT instance_id, team_id, epoch_id,
+                    (expires_at < now()) AS expired, consumed
+               FROM vault.flag_instances
+              ORDER BY epoch_id;"
+          echo "[*] total redemptions:"
+          psql "$DATABASE_URL" -Atq -c \
+            "SELECT count(*) FROM vault.flag_redemptions;"
+
+      - name: Fail loudly on any error
+        if: failure()
+        run: |
+          echo "::error Vault rotation failed. Old selectors remain valid,"
+          echo "::error so the previous epoch keeps working until fixed."

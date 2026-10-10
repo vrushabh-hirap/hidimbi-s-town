@@ -616,7 +616,7 @@ def run_chain(args):
 
 
 # ===========================================================================
-def whistle_timing_attack(base, token, length=8, rounds=2):
+def whistle_timing_attack(base, token, length=8, rounds=3):
     """Differential-timing recovery of the Keeper's whistle key.
 
     The relay sleeps `whistle_delay_us` for every correctly matched leading
