@@ -16,6 +16,8 @@ class TradeOffer(
     )
 
     fun calculateTotal(): Int {
+        // The storefront's display catalog is maintained separately under market/;
+        // its SKU estimates do not participate in exported trade parcels.
         // Intended arithmetic flaw: 32-bit signed integer overflow
         return quantity * unitPrice
     }
