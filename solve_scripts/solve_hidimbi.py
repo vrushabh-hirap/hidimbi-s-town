@@ -582,7 +582,7 @@ def run_chain(args):
         b"HIDIMBI_TOWN_SELECTOR_v1"
         + master_key + n1 + n2 + n3 + n4
         + seed + drum_key + scribe_rune + granary_secret + whistle_key
-        + f"{args.instance}:{team}".encode()
+        + f"{args.instance}:shared".encode()
     )
     selector = sha256(selector_material)
     proof_out = hmac.new(master_key,
